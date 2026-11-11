@@ -1,6 +1,6 @@
 module github.com/jasonkwh/perf
 
-go 1.26.5
+go 1.27.3
 
 require (
 	go.uber.org/automaxprocs v1.6.0

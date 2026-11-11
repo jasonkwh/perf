@@ -1,7 +1,7 @@
 version: "2"
 run:
   concurrency: 4
-  go: "1.26"
+  go: "1.27"
   modules-download-mode: mod
   tests: false
   allow-parallel-runners: false
@@ -27,7 +27,7 @@ linters:
     - godot
     - godox
     - gomoddirectives
-    - gomodguard
+    - gomodguard_v2
     - goprintffuncname
     - gosec
     - govet
