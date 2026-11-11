@@ -8,6 +8,7 @@ import (
 	_ "net/http/pprof" //nolint:gosec
 	"time"
 
+	"go.uber.org/multierr"
 	"go.uber.org/zap"
 )
 
@@ -15,26 +16,28 @@ const pprofPort = 6060
 
 type PProfServer struct {
 	httpServer *http.Server
+	lis        net.Listener
 }
 
 func NewPProfServer(zl *zap.Logger) (*PProfServer, error) {
-	psrv := &PProfServer{}
-
-	psrv.httpServer = &http.Server{
-		Handler:           http.DefaultServeMux,
-		ReadHeaderTimeout: 5 * time.Second,   //nolint:mnd
-		ReadTimeout:       30 * time.Second,  //nolint:mnd
-		WriteTimeout:      30 * time.Second,  //nolint:mnd
-		IdleTimeout:       120 * time.Second, //nolint:mnd
-	}
-
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", pprofPort))
 	if err != nil {
 		return nil, ErrFailedServerListenerInit(err)
 	}
 
+	psrv := &PProfServer{
+		lis: lis,
+		httpServer: &http.Server{
+			Handler:           http.DefaultServeMux,
+			ReadHeaderTimeout: 5 * time.Second,   //nolint:mnd
+			ReadTimeout:       30 * time.Second,  //nolint:mnd
+			WriteTimeout:      30 * time.Second,  //nolint:mnd
+			IdleTimeout:       120 * time.Second, //nolint:mnd
+		},
+	}
+
 	go func() {
-		if err := psrv.httpServer.Serve(lis); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := psrv.httpServer.Serve(psrv.lis); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			zl.Error("pprof server failed", zap.Error(err))
 		}
 	}()
@@ -45,9 +48,17 @@ func NewPProfServer(zl *zap.Logger) (*PProfServer, error) {
 }
 
 func (psrv *PProfServer) Close() error {
+	var errs error
+
 	if psrv.httpServer != nil {
-		return psrv.httpServer.Close()
+		errs = multierr.Append(errs, psrv.httpServer.Close())
 	}
 
-	return nil
+	if psrv.lis != nil {
+		if err := psrv.lis.Close(); !errors.Is(err, net.ErrClosed) {
+			errs = multierr.Append(errs, err)
+		}
+	}
+
+	return errs
 }
